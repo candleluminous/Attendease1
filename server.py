@@ -698,9 +698,9 @@ def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, stud
                     # Debug: log confidence values to diagnose recognition issues
                     print(f"[RECOGNITION] Serial={serial}, Confidence={confidence:.1f}, Student={'KNOWN' if serial in student_map else 'NOT_IN_MAP'}")
                     
-                    # Confidence < 85: LBPH distance metric, lower = better match
-                    # Raised from 70 to 85 for better acceptance of valid matches
-                    if confidence < 85:
+                    # Confidence < 110: LBPH distance metric, lower = better match
+                    # Railway logs show valid faces scoring 85-95, so threshold set to 110
+                    if confidence < 110:
                         # Multi-frame averaging: track predictions by face region
                         cx = (x + w // 2) // 50
                         cy = (y + h // 2) // 50
