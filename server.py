@@ -52,6 +52,20 @@ app.add_middleware(
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Add no-cache middleware for static files to prevent stale JS/CSS on redeployment
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class NoCacheStaticMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/") or request.url.path == "/":
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+app.add_middleware(NoCacheStaticMiddleware)
+
 # Shared Recognizer instance — tuned LBPH parameters for better discrimination
 recognizer = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
 recognizer_loaded = False
@@ -138,9 +152,43 @@ async def get_index():
     index_path = "index.html"
     if os.path.isfile(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            content = f.read()
+        return HTMLResponse(
+            content=content,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     else:
         raise HTTPException(status_code=404, detail="index.html not found in root directory")
+
+# Debug endpoint to diagnose Railway filesystem issues
+@app.get("/api/debug")
+async def api_debug():
+    image_dir = get_data_path("TrainingImage")
+    model_path = get_data_path("TrainingImageLabel", "Trainner.yml")
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    
+    image_count = 0
+    if os.path.exists(image_dir):
+        image_count = len([f for f in os.listdir(image_dir) if f.endswith(".jpg")])
+    
+    return {
+        "data_dir": DATA_DIR,
+        "data_dir_resolved": os.path.abspath(DATA_DIR),
+        "cwd": os.getcwd(),
+        "training_images_dir": os.path.abspath(image_dir),
+        "training_images_exist": os.path.exists(image_dir),
+        "training_image_count": image_count,
+        "model_path": os.path.abspath(model_path),
+        "model_exists": os.path.isfile(model_path),
+        "csv_path": os.path.abspath(csv_path),
+        "csv_exists": os.path.isfile(csv_path),
+        "haar_cascade_exists": check_haarcascadefile(),
+        "recognizer_loaded": recognizer_loaded
+    }
 
 # API Stats
 @app.get("/api/stats")
