@@ -276,8 +276,10 @@ async def api_train_model():
     # Run CPU intensive trainer in a thread pool to avoid blocking Event Loop
     def train_task():
         image_paths = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith(".jpg")]
+        print(f"[TRAIN] Found {len(image_paths)} image files in {image_dir}")
         faces = []
         ids = []
+        skipped = 0
         
         for image_path in image_paths:
             try:
@@ -308,24 +310,41 @@ async def api_train_model():
                     dark = cv2.convertScaleAbs(processed, alpha=0.85, beta=-15)
                     faces.append(dark)
                     ids.append(serial_no)
+                else:
+                    skipped += 1
+                    print(f"[TRAIN] Skipping file with unexpected name format: {filename}")
                     
             except Exception as ex:
-                print(f"Skipping bad image {image_path}: {ex}")
+                skipped += 1
+                print(f"[TRAIN] Skipping bad image {image_path}: {ex}")
                 
         if len(faces) == 0:
-            return False, "No student face data found. Register someone first!"
+            return False, f"No student face data found. {len(image_paths)} files scanned, {skipped} skipped. Register someone first!"
             
-        # Tuned LBPH: radius=2 captures larger patterns, neighbors=16 for finer detail
-        rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
-        rec.train(faces, np.array(ids))
-        os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
-        rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
-        total_samples = len(faces)
-        return True, f"Model trained successfully with {total_samples} augmented samples!"
+        print(f"[TRAIN] Training LBPH with {len(faces)} face samples from {len(set(ids))} unique IDs")
         
-    success, msg = await asyncio.to_thread(train_task)
-    if not success:
-        raise HTTPException(status_code=400, detail=msg)
+        try:
+            # Tuned LBPH: radius=2 captures larger patterns, neighbors=16 for finer detail
+            rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
+            rec.train(faces, np.array(ids))
+            os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
+            rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
+            total_samples = len(faces)
+            print(f"[TRAIN] Success! Model saved with {total_samples} samples")
+            return True, f"Model trained successfully with {total_samples} augmented samples!"
+        except Exception as ex:
+            print(f"[TRAIN] LBPH train/save error: {ex}")
+            return False, f"Model training failed: {str(ex)}"
+    
+    try:
+        success, msg = await asyncio.to_thread(train_task)
+        if not success:
+            raise HTTPException(status_code=400, detail=msg)
+    except HTTPException:
+        raise
+    except Exception as ex:
+        print(f"[TRAIN] Unexpected error: {ex}")
+        raise HTTPException(status_code=500, detail=f"Training crashed: {str(ex)}")
         
     # Reload model in server memory
     reload_recognizer()
