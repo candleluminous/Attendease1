@@ -388,7 +388,7 @@ function startAttendanceCaptureLoop() {
     function captureNext() {
         if (wsAttendance && wsAttendance.readyState === WebSocket.OPEN && activeCamStream) {
             ctx.drawImage(video, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-            const base64Data = captureCanvas.toDataURL('image/jpeg', 0.5); // Slightly compressed for faster transmission
+            const base64Data = captureCanvas.toDataURL('image/jpeg', 0.85); // High quality to preserve facial features for LBPH
             const base64Raw = base64Data.split(',')[1];
             wsAttendance.send(base64Raw);
         }
@@ -708,7 +708,7 @@ function startRegisterFrameLoop() {
     registerInterval = setInterval(() => {
         if (wsRegister && wsRegister.readyState === WebSocket.OPEN && activeRegStream) {
             ctx.drawImage(video, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-            const base64Data = captureCanvas.toDataURL('image/jpeg', 0.6);
+            const base64Data = captureCanvas.toDataURL('image/jpeg', 0.85);
             const base64Raw = base64Data.split(',')[1];
             wsRegister.send(base64Raw);
         }

@@ -6,6 +6,7 @@ import datetime
 import base64
 import numpy as np
 import pandas as pd
+from collections import defaultdict, deque
 from PIL import Image
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -13,6 +14,21 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import asyncio
 import uvicorn
+
+# ---- Face Preprocessing Pipeline ----
+FACE_SIZE = 200  # Uniform face crop dimension
+
+def preprocess_face(face_img):
+    """Apply CLAHE + bilateral filter + resize to a grayscale face crop.
+    This must be used identically during training, registration, AND recognition."""
+    # Resize to uniform dimensions
+    face_resized = cv2.resize(face_img, (FACE_SIZE, FACE_SIZE))
+    # Bilateral filter: reduce noise while preserving edges
+    face_filtered = cv2.bilateralFilter(face_resized, d=9, sigmaColor=75, sigmaSpace=75)
+    # CLAHE: adaptive histogram equalization for lighting robustness
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    face_clahe = clahe.apply(face_filtered)
+    return face_clahe
 
 DATA_DIR = os.getenv("DATA_DIR", ".")
 
@@ -36,8 +52,8 @@ app.add_middleware(
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Shared Recognizer instance
-recognizer = cv2.face.LBPHFaceRecognizer_create()
+# Shared Recognizer instance — tuned LBPH parameters for better discrimination
+recognizer = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
 recognizer_loaded = False
 
 def reload_recognizer():
@@ -268,24 +284,44 @@ async def api_train_model():
                 pil_image = Image.open(image_path).convert('L')
                 image_np = np.array(pil_image, 'uint8')
                 # File format: {name}.{serial}.{student_id}.{sampleNum}.jpg
-                # To be bulletproof, get the serial number from filename (which is the middle integer value)
                 filename = os.path.split(image_path)[-1]
                 parts = filename.split(".")
                 if len(parts) >= 3:
                     serial_no = int(parts[1])
-                    faces.append(image_np)
+                    
+                    # Preprocess the face for consistent feature extraction
+                    processed = preprocess_face(image_np)
+                    faces.append(processed)
                     ids.append(serial_no)
+                    
+                    # Augmentation 1: horizontal flip (doubles training data)
+                    flipped = cv2.flip(processed, 1)
+                    faces.append(flipped)
+                    ids.append(serial_no)
+                    
+                    # Augmentation 2: slight brightness increase
+                    bright = cv2.convertScaleAbs(processed, alpha=1.15, beta=15)
+                    faces.append(bright)
+                    ids.append(serial_no)
+                    
+                    # Augmentation 3: slight brightness decrease
+                    dark = cv2.convertScaleAbs(processed, alpha=0.85, beta=-15)
+                    faces.append(dark)
+                    ids.append(serial_no)
+                    
             except Exception as ex:
                 print(f"Skipping bad image {image_path}: {ex}")
                 
         if len(faces) == 0:
             return False, "No student face data found. Register someone first!"
             
-        rec = cv2.face.LBPHFaceRecognizer_create()
+        # Tuned LBPH: radius=2 captures larger patterns, neighbors=16 for finer detail
+        rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
         rec.train(faces, np.array(ids))
         os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
         rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
-        return True, "Model trained successfully!"
+        total_samples = len(faces)
+        return True, f"Model trained successfully with {total_samples} augmented samples!"
         
     success, msg = await asyncio.to_thread(train_task)
     if not success:
@@ -538,8 +574,9 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
             for (x, y, w, h) in faces:
                 sampleNum += 1
                 face_crop = gray[y:y + h, x:x + w]
-                # Save crop exactly in the same naming scheme as the original script
-                cv2.imwrite(get_data_path("TrainingImage", f" {name}.{serial}.{id}.{sampleNum}.jpg"), face_crop)
+                # Preprocess before saving for consistent high-quality training data
+                face_processed = preprocess_face(face_crop)
+                cv2.imwrite(get_data_path("TrainingImage", f" {name}.{serial}.{id}.{sampleNum}.jpg"), face_processed)
                 
                 # Send progress update
                 await websocket.send_json({"status": "capturing", "count": sampleNum})
@@ -571,7 +608,7 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
             pass
 
 # Helper function to process frame in thread pool
-def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, student_map):
+def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, student_map, confidence_history):
     # Detect faces in original resolution grayscale frame with optimized parameters
     faces_detected = detector.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
     
@@ -580,18 +617,49 @@ def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, stud
         student_name = "Unknown"
         student_id = ""
         serial_val = None
+        raw_confidence = None
         
         if recognizer_loaded:
             try:
-                # Crop face region
+                # Crop face region and apply same preprocessing as training
                 crop_face = gray[y:y + h, x:x + w]
                 if crop_face.shape[0] > 0 and crop_face.shape[1] > 0:
-                    serial, confidence = recognizer.predict(crop_face)
-                    if confidence < 50:
-                        if serial in student_map:
+                    processed_face = preprocess_face(crop_face)
+                    serial, confidence = recognizer.predict(processed_face)
+                    raw_confidence = confidence
+                    
+                    # Confidence < 70: LBPH distance metric, lower = better match
+                    if confidence < 70:
+                        # Multi-frame averaging: track predictions by face region
+                        # Use center-of-face as a stable key (quantized to 50px grid)
+                        cx = (x + w // 2) // 50
+                        cy = (y + h // 2) // 50
+                        region_key = (cx, cy)
+                        
+                        # Add this prediction to the rolling history
+                        confidence_history[region_key].append(serial)
+                        
+                        # Keep only last 5 predictions
+                        if len(confidence_history[region_key]) > 5:
+                            confidence_history[region_key].popleft()
+                        
+                        # Vote: require 3-of-5 agreement for confirmed identity
+                        history = confidence_history[region_key]
+                        if len(history) >= 2:  # Need at least 2 frames
+                            from collections import Counter
+                            vote_counts = Counter(history)
+                            best_serial, best_count = vote_counts.most_common(1)[0]
+                            # Require majority (3/5, or 2/2, 2/3 for early frames)
+                            threshold = max(2, (len(history) + 1) // 2)
+                            if best_count >= threshold and best_serial in student_map:
+                                serial_val = best_serial
+                                student_id = student_map[best_serial]["id"]
+                                student_name = student_map[best_serial]["name"]
+                        elif serial in student_map:
+                            # First frame: show tentatively
+                            serial_val = serial
                             student_id = student_map[serial]["id"]
                             student_name = student_map[serial]["name"]
-                            serial_val = serial
             except Exception as e:
                 print(f"Error predicting face: {e}")
                 
@@ -642,6 +710,9 @@ async def websocket_attendance(websocket: WebSocket):
     # Keep track of marked IDs in this active websocket session
     marked_in_session = set()
     
+    # Multi-frame confidence history: tracks rolling predictions per face region
+    confidence_history = defaultdict(deque)
+    
     # Load today's list of marked IDs from CSV to avoid duplicate triggers
     ts = time.time()
     date_str = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
@@ -683,7 +754,8 @@ async def websocket_attendance(websocket: WebSocket):
                 detector,
                 recognizer_loaded,
                 recognizer,
-                student_map
+                student_map,
+                confidence_history
             )
             
             faces_payload = []
