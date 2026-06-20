@@ -628,38 +628,42 @@ def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, stud
                     serial, confidence = recognizer.predict(processed_face)
                     raw_confidence = confidence
                     
-                    # Confidence < 70: LBPH distance metric, lower = better match
-                    if confidence < 70:
+                    # Debug: log confidence values to diagnose recognition issues
+                    print(f"[RECOGNITION] Serial={serial}, Confidence={confidence:.1f}, Student={'KNOWN' if serial in student_map else 'NOT_IN_MAP'}")
+                    
+                    # Confidence < 85: LBPH distance metric, lower = better match
+                    # Raised from 70 to 85 for better acceptance of valid matches
+                    if confidence < 85:
                         # Multi-frame averaging: track predictions by face region
-                        # Use center-of-face as a stable key (quantized to 50px grid)
                         cx = (x + w // 2) // 50
                         cy = (y + h // 2) // 50
                         region_key = (cx, cy)
                         
-                        # Add this prediction to the rolling history
                         confidence_history[region_key].append(serial)
                         
                         # Keep only last 5 predictions
                         if len(confidence_history[region_key]) > 5:
                             confidence_history[region_key].popleft()
                         
-                        # Vote: require 3-of-5 agreement for confirmed identity
-                        history = confidence_history[region_key]
-                        if len(history) >= 2:  # Need at least 2 frames
-                            from collections import Counter
-                            vote_counts = Counter(history)
-                            best_serial, best_count = vote_counts.most_common(1)[0]
-                            # Require majority (3/5, or 2/2, 2/3 for early frames)
-                            threshold = max(2, (len(history) + 1) // 2)
-                            if best_count >= threshold and best_serial in student_map:
-                                serial_val = best_serial
-                                student_id = student_map[best_serial]["id"]
-                                student_name = student_map[best_serial]["name"]
-                        elif serial in student_map:
-                            # First frame: show tentatively
+                        # Show identity immediately if in student_map
+                        # Multi-frame voting adds stability but shouldn't block first match
+                        if serial in student_map:
                             serial_val = serial
                             student_id = student_map[serial]["id"]
                             student_name = student_map[serial]["name"]
+                            
+                            # If we have history, use voting for even more stability
+                            history = confidence_history[region_key]
+                            if len(history) >= 3:
+                                from collections import Counter
+                                vote_counts = Counter(history)
+                                best_serial, best_count = vote_counts.most_common(1)[0]
+                                if best_serial in student_map:
+                                    serial_val = best_serial
+                                    student_id = student_map[best_serial]["id"]
+                                    student_name = student_map[best_serial]["name"]
+                    else:
+                        print(f"[RECOGNITION] REJECTED: confidence {confidence:.1f} >= 85 threshold")
             except Exception as e:
                 print(f"Error predicting face: {e}")
                 
