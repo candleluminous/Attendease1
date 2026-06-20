@@ -377,7 +377,7 @@ async def api_train_model():
         try:
             # Tuned LBPH: radius=2 captures larger patterns, neighbors=8 for balanced RAM/details
             rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=8, grid_x=8, grid_y=8)
-            rec.train(faces, np.array(ids))
+            rec.train(faces, np.array(ids, dtype=np.int32))
             os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
             rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
             total_samples = len(faces)
@@ -714,7 +714,7 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
                 face_crop = gray[y:y + h, x:x + w]
                 # Preprocess before saving for consistent high-quality training data
                 face_processed = preprocess_face(face_crop)
-                cv2.imwrite(get_data_path("TrainingImage", f" {name}.{serial}.{id}.{sampleNum}.jpg"), face_processed)
+                cv2.imwrite(get_data_path("TrainingImage", f"{name}.{serial}.{id}.{sampleNum}.jpg"), face_processed)
                 
                 # Send progress update
                 await websocket.send_json({"status": "capturing", "count": sampleNum})
@@ -836,13 +836,13 @@ async def websocket_attendance(websocket: WebSocket):
             df = pd.read_csv(csv_path)
             # Remove any empty spaces or blank columns from CSV headers
             df.columns = df.columns.str.strip()
-            df = df.dropna(subset=['SERIAL NO.'])
+            df = df.dropna(subset=['SERIAL NO.', 'ID', 'NAME'])
             for _, row in df.iterrows():
                 try:
                     s_no = int(row['SERIAL NO.'])
                     student_map[s_no] = {
-                        "id": str(row['ID']),
-                        "name": str(row['NAME'])
+                        "id": str(row['ID']).strip(),
+                        "name": str(row['NAME']).strip()
                     }
                 except:
                     continue
