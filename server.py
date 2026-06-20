@@ -492,6 +492,21 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
         
     os.makedirs(get_data_path("StudentDetails"), exist_ok=True)
     os.makedirs(get_data_path("TrainingImage"), exist_ok=True)
+
+    # Check if student ID already exists to prevent duplicates
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if os.path.isfile(csv_path):
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None)  # Skip header
+                for row in reader:
+                    if len(row) >= 5 and row[2].strip() == id.strip():
+                        await websocket.send_json({"status": "error", "message": f"Student ID '{id}' is already registered!"})
+                        await websocket.close()
+                        return
+        except Exception as e:
+            print(f"Error checking duplicate ID: {e}")
     
     detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     serial = get_next_serial()
