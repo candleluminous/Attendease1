@@ -67,7 +67,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
 app.add_middleware(NoCacheStaticMiddleware)
 
 # Shared Recognizer instance — tuned LBPH parameters for better discrimination
-recognizer = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
+recognizer = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=8, grid_x=8, grid_y=8)
 recognizer_loaded = False
 
 def reload_recognizer():
@@ -140,6 +140,9 @@ class ChangePasswordRequest(BaseModel):
     confirm_pass: str
 
 class PasswordVerifyRequest(BaseModel):
+    password: str
+
+class ResetRequest(BaseModel):
     password: str
 
 # ----------------------------------------------------
@@ -372,8 +375,8 @@ async def api_train_model():
         print(f"[TRAIN] Training LBPH with {len(faces)} face samples from {len(set(ids))} unique IDs")
         
         try:
-            # Tuned LBPH: radius=2 captures larger patterns, neighbors=16 for finer detail
-            rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=16, grid_x=8, grid_y=8)
+            # Tuned LBPH: radius=2 captures larger patterns, neighbors=8 for balanced RAM/details
+            rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=8, grid_x=8, grid_y=8)
             rec.train(faces, np.array(ids))
             os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
             rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
@@ -435,6 +438,74 @@ async def api_verify_password(req: PasswordVerifyRequest):
     if key and req.password != key:
         raise HTTPException(status_code=401, detail="Incorrect admin password!")
     return {"status": "ok"}
+
+# Reset System Database securely
+@app.post("/api/reset")
+async def api_reset_system(req: ResetRequest):
+    psd_file = get_data_path("TrainingImageLabel", "psd.txt")
+    if os.path.isfile(psd_file):
+        with open(psd_file, "r") as f:
+            key = f.read().strip()
+    else:
+        key = ""
+        
+    if key and req.password != key:
+        raise HTTPException(status_code=401, detail="Incorrect admin password!")
+        
+    try:
+        # 1. Clear TrainingImage/ directory
+        image_dir = get_data_path("TrainingImage")
+        if os.path.exists(image_dir):
+            for filename in os.listdir(image_dir):
+                file_path = os.path.join(image_dir, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"[RESET] Error removing {file_path}: {e}")
+                    
+        # 2. Delete Trainer model
+        trainer_path = get_data_path("TrainingImageLabel", "Trainner.yml")
+        if os.path.isfile(trainer_path):
+            try:
+                os.remove(trainer_path)
+            except Exception as e:
+                print(f"[RESET] Error removing {trainer_path}: {e}")
+                
+        # 3. Delete password file to reset password to default empty string
+        if os.path.isfile(psd_file):
+            try:
+                os.remove(psd_file)
+            except Exception as e:
+                print(f"[RESET] Error removing {psd_file}: {e}")
+                
+        # 4. Reinitialize StudentDetails.csv
+        csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+        if os.path.exists(os.path.dirname(csv_path)):
+            try:
+                with open(csv_path, 'w', newline='', encoding='utf-8') as csvFile:
+                    writer = csv.writer(csvFile)
+                    writer.writerow(['SERIAL NO.', '', 'ID', '', 'NAME'])
+            except Exception as e:
+                print(f"[RESET] Error resetting {csv_path}: {e}")
+                
+        # 5. Clear Attendance/ directory
+        attendance_dir = get_data_path("Attendance")
+        if os.path.exists(attendance_dir):
+            for filename in os.listdir(attendance_dir):
+                file_path = os.path.join(attendance_dir, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"[RESET] Error removing {file_path}: {e}")
+                    
+        # Reload the recognizer (which will now set recognizer_loaded = False)
+        reload_recognizer()
+        
+        return {"message": "System database reset successfully. Ready to start fresh!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reset failed: {e}")
 
 # List all registered students
 @app.get("/api/students")

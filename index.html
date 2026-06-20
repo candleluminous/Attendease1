@@ -516,6 +516,29 @@
                                 </div>
                             </form>
                         </div>
+
+                        <!-- Danger Zone / Reset Card -->
+                        <div class="dashboard-panel danger-zone-panel">
+                            <div class="panel-header">
+                                <h3 style="color: var(--color-danger);">Danger Zone</h3>
+                            </div>
+                            <p class="panel-desc">Wipe all registered students, face datasets, trained models, and attendance logs. This action cannot be undone.</p>
+                            
+                            <form id="form-reset-system" onsubmit="return false;">
+                                <div class="form-group">
+                                    <label for="reset-admin-password">Confirm Admin Password</label>
+                                    <input type="password" id="reset-admin-password" placeholder="••••••••" required autocomplete="off" style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); color: var(--text-primary); margin-top: 6px;">
+                                    <small class="form-hint">Enter admin password to authorize complete database wipe.</small>
+                                </div>
+                                
+                                <div class="panel-actions" style="margin-top: 20px;">
+                                    <button type="submit" id="btn-reset-system" class="btn-danger btn-full">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: middle;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                        Reset System Database
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                     
                     <!-- Support / Info Details -->

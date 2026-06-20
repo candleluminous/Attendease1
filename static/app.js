@@ -939,6 +939,48 @@ async function changeAdminPassword() {
     }
 }
 
+async function resetSystemDatabase() {
+    const passwordInput = document.getElementById('reset-admin-password');
+    const password = passwordInput.value;
+    const btnReset = document.getElementById('btn-reset-system');
+    
+    if (!password) {
+        showToast("Password Required", "Please enter the admin password to reset.", true);
+        return;
+    }
+    
+    if (!confirm("CRITICAL WARNING: This will permanently delete all students, face sample datasets, trained models, and attendance logs. Are you sure you want to completely wipe the system?")) {
+        return;
+    }
+    
+    btnReset.disabled = true;
+    
+    try {
+        const response = await fetch(getBackendUrl() + '/api/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast("System Reset Successful", data.message || "All database records have been deleted.");
+            passwordInput.value = '';
+            // Refresh stats and lists immediately
+            loadDashboardStats();
+            loadTodayAttendance();
+        } else {
+            showToast("Reset Failed", data.detail || "Error resetting database.", true);
+        }
+    } catch (err) {
+        console.error("Error during reset request:", err);
+        showToast("Network Error", "Could not complete reset request.", true);
+    } finally {
+        btnReset.disabled = false;
+    }
+}
+
 // ----------------------------------------------------
 // REGISTERED STUDENTS CONTROLS
 // ----------------------------------------------------
@@ -1078,6 +1120,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-change-password').addEventListener('submit', (e) => {
         e.preventDefault();
         changeAdminPassword();
+    });
+    document.getElementById('form-reset-system').addEventListener('submit', (e) => {
+        e.preventDefault();
+        resetSystemDatabase();
     });
     
     // Export Today Attendance
