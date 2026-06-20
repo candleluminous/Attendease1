@@ -839,15 +839,21 @@ function filterHistoryTable() {
 
 // Delete an attendance entry
 async function deleteAttendanceEntry(filename, studentId, timeLogged, studentName) {
+    console.log("[DELETE ATTENDANCE] Initiated for student:", studentName, "ID:", studentId, "time:", timeLogged);
     if (!confirm(`Are you sure you want to remove the attendance log for "${studentName}" (ID: ${studentId}) at ${timeLogged}?`)) {
+        console.log("[DELETE ATTENDANCE] Cancelled by user.");
         return;
     }
     
+    console.log("[DELETE ATTENDANCE] Confirmed. Sending fetch request...");
     try {
-        const response = await fetch(getBackendUrl() + `/api/attendance?filename=${encodeURIComponent(filename)}&student_id=${encodeURIComponent(studentId)}&time_logged=${encodeURIComponent(timeLogged)}`, {
+        const url = getBackendUrl() + `/api/attendance?filename=${encodeURIComponent(filename)}&student_id=${encodeURIComponent(studentId)}&time_logged=${encodeURIComponent(timeLogged)}`;
+        console.log("[DELETE ATTENDANCE] Request URL:", url);
+        const response = await fetch(url, {
             method: 'DELETE'
         });
         const data = await response.json();
+        console.log("[DELETE ATTENDANCE] Response:", response.status, data);
         
         if (response.ok) {
             showToast("Log Removed", data.message || "Attendance log removed successfully!");
@@ -1021,14 +1027,19 @@ async function loadRegisteredStudents() {
         
         // Add event listeners to delete buttons
         const deleteButtons = tbody.querySelectorAll('.btn-delete-student');
+        console.log("[STUDENTS SCREEN] Found delete buttons to bind:", deleteButtons.length);
         deleteButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name');
+                console.log("[STUDENT DELETE] Clicked Remove for name:", name, "ID:", id);
                 if (confirm(`Are you sure you want to remove student "${name}" (ID: ${id}) and delete all their training face images?`)) {
+                    console.log("[STUDENT DELETE] Confirmed. Calling deleteStudent API...");
                     await deleteStudent(id);
+                } else {
+                    console.log("[STUDENT DELETE] Cancelled by user.");
                 }
             });
         });
@@ -1039,11 +1050,15 @@ async function loadRegisteredStudents() {
 }
 
 async function deleteStudent(studentId) {
+    console.log("[STUDENT DELETE API] Initiating request for studentId:", studentId);
     try {
-        const response = await fetch(getBackendUrl() + `/api/students/${studentId}`, {
+        const url = getBackendUrl() + `/api/students/${studentId}`;
+        console.log("[STUDENT DELETE API] Request URL:", url);
+        const response = await fetch(url, {
             method: 'DELETE'
         });
         const data = await response.json();
+        console.log("[STUDENT DELETE API] Response:", response.status, data);
         
         if (response.ok) {
             showToast("Student Removed", data.message || "Student removed successfully!");
