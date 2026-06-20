@@ -1,0 +1,762 @@
+import os
+import cv2
+import csv
+import time
+import datetime
+import base64
+import numpy as np
+import pandas as pd
+from PIL import Image
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import asyncio
+import uvicorn
+
+DATA_DIR = os.getenv("DATA_DIR", ".")
+
+def get_data_path(*paths):
+    return os.path.join(DATA_DIR, *paths)
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="Attendease Web Server")
+
+# Configure CORS to allow any origin to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount Static Files Directory
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Shared Recognizer instance
+recognizer = cv2.face.LBPHFaceRecognizer_create()
+recognizer_loaded = False
+
+def reload_recognizer():
+    global recognizer_loaded, recognizer
+    trainer_path = get_data_path("TrainingImageLabel", "Trainner.yml")
+    if os.path.isfile(trainer_path):
+        try:
+            recognizer.read(trainer_path)
+            recognizer_loaded = True
+            print("LBPH Recognizer model loaded successfully.")
+        except Exception as e:
+            print(f"Error loading recognizer: {e}")
+            recognizer_loaded = False
+    else:
+        recognizer_loaded = False
+        print("LBPH Recognizer trainer file not found. Ready to train.")
+
+# Load recognizer on startup
+reload_recognizer()
+
+# Helpers matching original codebase logic
+def assure_path_exists(path):
+    dir_name = os.path.dirname(path)
+    if dir_name and not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+
+def check_haarcascadefile():
+    return os.path.isfile("haarcascade_frontalface_default.xml")
+
+def get_registration_count():
+    res = 0
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if os.path.isfile(csv_path):
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as csvFile:
+                reader = csv.reader(csvFile)
+                for row in reader:
+                    if len(row) >= 5 and row[0].strip() != '' and row[0].strip() != 'SERIAL NO.':
+                        res += 1
+        except Exception as e:
+            print(f"Error reading registration count: {e}")
+    return res
+
+def get_next_serial():
+    max_serial = 0
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if os.path.isfile(csv_path):
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as csvFile:
+                reader = csv.reader(csvFile)
+                for row in reader:
+                    if len(row) >= 5 and row[0].strip() != '' and row[0].strip() != 'SERIAL NO.':
+                        try:
+                            val = int(row[0].strip())
+                            if val > max_serial:
+                                max_serial = val
+                        except ValueError:
+                            continue
+            return max_serial + 1
+        except Exception as e:
+            print(f"Error reading next serial: {e}")
+            return 1
+    else:
+        return 1
+
+# Pydantic Schemas
+class ChangePasswordRequest(BaseModel):
+    old_pass: str
+    new_pass: str
+    confirm_pass: str
+
+class PasswordVerifyRequest(BaseModel):
+    password: str
+
+# ----------------------------------------------------
+# HTTP ROUTING
+# ----------------------------------------------------
+
+# Root: Serves index.html SPA dashboard
+@app.get("/", response_class=HTMLResponse)
+async def get_index():
+    index_path = "static/index.html"
+    if os.path.isfile(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    else:
+        raise HTTPException(status_code=404, detail="index.html not found under static/")
+
+# API Stats
+@app.get("/api/stats")
+async def get_stats():
+    # Present count today
+    present_today = 0
+    last_marked = None
+    
+    date_str = datetime.datetime.now().strftime('%d-%m-%Y')
+    attendance_file = get_data_path("Attendance", f"Attendance_{date_str}.csv")
+    
+    if os.path.isfile(attendance_file):
+        with open(attendance_file, 'r') as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+            # Filter headers and empty lines
+            records = [r for r in rows if len(r) > 0 and r[0] != 'Id']
+            # Divide by 2 due to Windows empty rows behavior if written with standard text mode
+            present_today = len(records)
+            
+            if len(records) > 0:
+                last_row = records[-1]
+                last_marked = {
+                    "id": last_row[0],
+                    "name": last_row[2],
+                    "date": last_row[4],
+                    "time": last_row[6]
+                }
+                
+    registered_count = get_registration_count()
+    absent_count = max(0, registered_count - present_today)
+                
+    return {
+        "registered_count": registered_count,
+        "present_today": present_today,
+        "absent_count": absent_count,
+        "last_marked": last_marked,
+        "model_exists": os.path.isfile(get_data_path("TrainingImageLabel", "Trainner.yml"))
+    }
+
+# Today's attendance list
+@app.get("/api/attendance/today")
+async def get_today_attendance():
+    date_str = datetime.datetime.now().strftime('%d-%m-%Y')
+    attendance_file = get_data_path("Attendance", f"Attendance_{date_str}.csv")
+    records = []
+    
+    if os.path.isfile(attendance_file):
+        with open(attendance_file, 'r') as f:
+            reader = csv.reader(f)
+            for r in reader:
+                if len(r) > 0 and r[0] != 'Id':
+                    records.append({
+                        "id": r[0],
+                        "name": r[2],
+                        "date": r[4],
+                        "time": r[6]
+                    })
+    # Reverse to show latest first
+    records.reverse()
+    return {"records": records}
+
+# Attendance history list & detail viewer
+@app.get("/api/attendance/history")
+async def get_attendance_history(filename: str = Query(None), download: bool = Query(False)):
+    attendance_dir = get_data_path("Attendance")
+    os.makedirs(attendance_dir, exist_ok=True)
+    
+    # If a specific filename is requested
+    if filename:
+        # Sanitization
+        filename = os.path.basename(filename)
+        file_path = os.path.join(attendance_dir, filename)
+        
+        if not os.path.isfile(file_path):
+            raise HTTPException(status_code=404, detail="Attendance file not found")
+            
+        if download:
+            return FileResponse(
+                path=file_path,
+                filename=filename,
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+            
+        records = []
+        with open(file_path, 'r') as f:
+            reader = csv.reader(f)
+            for r in reader:
+                if len(r) > 0 and r[0] != 'Id':
+                    records.append({
+                        "id": r[0],
+                        "name": r[2],
+                        "date": r[4],
+                        "time": r[6]
+                    })
+        return {"records": records}
+        
+    # Otherwise list all history files
+    files_list = []
+    if os.path.exists(attendance_dir):
+        files = [f for f in os.listdir(attendance_dir) if f.startswith("Attendance_") and f.endswith(".csv")]
+        for f in files:
+            # Extract date from Attendance_DD-MM-YYYY.csv
+            parts = f.replace("Attendance_", "").replace(".csv", "").split("-")
+            if len(parts) == 3:
+                date_display = f"{parts[0]} {parts[1]} {parts[2]}"
+                files_list.append({
+                    "filename": f,
+                    "date": date_display,
+                    "raw_date": f.replace("Attendance_", "").replace(".csv", "")
+                })
+                
+    # Sort files by newest date
+    def parse_file_date(item):
+        try:
+            return datetime.datetime.strptime(item["raw_date"], "%d-%m-%Y")
+        except:
+            return datetime.datetime.min
+            
+    files_list.sort(key=parse_file_date, reverse=True)
+    return {"files": files_list}
+
+# Model Trainer Endpoint
+@app.post("/api/train")
+async def api_train_model():
+    if not check_haarcascadefile():
+        raise HTTPException(status_code=500, detail="Haar cascade file not found on server!")
+        
+    image_dir = get_data_path("TrainingImage")
+    os.makedirs(image_dir, exist_ok=True)
+    
+    # Run CPU intensive trainer in a thread pool to avoid blocking Event Loop
+    def train_task():
+        image_paths = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith(".jpg")]
+        faces = []
+        ids = []
+        
+        for image_path in image_paths:
+            try:
+                pil_image = Image.open(image_path).convert('L')
+                image_np = np.array(pil_image, 'uint8')
+                # File format: {name}.{serial}.{student_id}.{sampleNum}.jpg
+                # To be bulletproof, get the serial number from filename (which is the middle integer value)
+                filename = os.path.split(image_path)[-1]
+                parts = filename.split(".")
+                if len(parts) >= 3:
+                    serial_no = int(parts[1])
+                    faces.append(image_np)
+                    ids.append(serial_no)
+            except Exception as ex:
+                print(f"Skipping bad image {image_path}: {ex}")
+                
+        if len(faces) == 0:
+            return False, "No student face data found. Register someone first!"
+            
+        rec = cv2.face.LBPHFaceRecognizer_create()
+        rec.train(faces, np.array(ids))
+        os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
+        rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
+        return True, "Model trained successfully!"
+        
+    success, msg = await asyncio.to_thread(train_task)
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+        
+    # Reload model in server memory
+    reload_recognizer()
+    return {"message": msg}
+
+# Change Admin Password
+@app.post("/api/change-password")
+async def api_change_password(req: ChangePasswordRequest):
+    psd_file = get_data_path("TrainingImageLabel", "psd.txt")
+    assure_path_exists(psd_file)
+    
+    if os.path.isfile(psd_file):
+        with open(psd_file, "r") as f:
+            key = f.read().strip()
+    else:
+        # Default password if txt doesn't exist
+        key = ""
+        
+    if key and req.old_pass != key:
+        raise HTTPException(status_code=401, detail="Incorrect old password!")
+        
+    if req.new_pass != req.confirm_pass:
+        raise HTTPException(status_code=400, detail="New passwords do not match!")
+        
+    with open(psd_file, "w") as f:
+        f.write(req.new_pass)
+        
+    return {"message": "Password updated successfully!"}
+
+# Verify Admin Password
+@app.post("/api/verify-password")
+async def api_verify_password(req: PasswordVerifyRequest):
+    psd_file = get_data_path("TrainingImageLabel", "psd.txt")
+    if os.path.isfile(psd_file):
+        with open(psd_file, "r") as f:
+            key = f.read().strip()
+    else:
+        key = ""
+        
+    if key and req.password != key:
+        raise HTTPException(status_code=401, detail="Incorrect admin password!")
+    return {"status": "ok"}
+
+# List all registered students
+@app.get("/api/students")
+async def api_get_students():
+    students = []
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if os.path.isfile(csv_path):
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                # Read header
+                header = next(reader, None)
+                for row in reader:
+                    if len(row) >= 5 and row[0].strip() != '' and row[0].strip() != 'SERIAL NO.':
+                        students.append({
+                            "serial": int(row[0].strip()),
+                            "id": row[2].strip(),
+                            "name": row[4].strip()
+                        })
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error reading student details: {e}")
+    return {"students": students}
+
+# Remove a registered student and their training face samples
+@app.delete("/api/students/{student_id}")
+async def api_delete_student(student_id: str):
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if not os.path.isfile(csv_path):
+        raise HTTPException(status_code=404, detail="Student details file not found.")
+        
+    updated_rows = []
+    student_found = False
+    student_serial = None
+    student_name = ""
+    
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header:
+                updated_rows.append(header)
+            for row in reader:
+                if len(row) >= 5:
+                    curr_id = row[2].strip()
+                    if curr_id == student_id:
+                        student_found = True
+                        student_serial = row[0].strip()
+                        student_name = row[4].strip()
+                    else:
+                        updated_rows.append(row)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading student details: {e}")
+        
+    if not student_found:
+        raise HTTPException(status_code=404, detail="Student not found.")
+        
+    try:
+        # Write back filtered records
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerows(updated_rows)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error writing to student details: {e}")
+        
+    # Delete student's face images from TrainingImage/ directory
+    image_dir = get_data_path("TrainingImage")
+    deleted_images_count = 0
+    if os.path.exists(image_dir) and student_serial:
+        try:
+            for filename in os.listdir(image_dir):
+                parts = filename.split(".")
+                if len(parts) >= 3:
+                    # parts[1] is serial, parts[2] is id
+                    if parts[1].strip() == str(student_serial).strip() and parts[2].strip() == student_id.strip():
+                        try:
+                            os.remove(os.path.join(image_dir, filename))
+                            deleted_images_count += 1
+                        except Exception as ex:
+                            print(f"Error deleting image {filename}: {ex}")
+        except Exception as e:
+            print(f"Error scanning TrainingImage directory: {e}")
+            
+    return {
+        "message": f"Student {student_name} (ID: {student_id}) removed successfully.",
+        "deleted_images": deleted_images_count
+    }
+
+# Remove an attendance log record
+@app.delete("/api/attendance")
+async def api_delete_attendance(filename: str = Query(...), student_id: str = Query(...), time_logged: str = Query(...)):
+    filename = os.path.basename(filename)
+    attendance_dir = get_data_path("Attendance")
+    file_path = os.path.join(attendance_dir, filename)
+    
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Attendance file not found")
+        
+    updated_rows = []
+    found = False
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header:
+                updated_rows.append(header)
+            for row in reader:
+                if len(row) >= 7:
+                    curr_id = row[0].strip()
+                    curr_time = row[6].strip()
+                    if curr_id == student_id and curr_time == time_logged:
+                        found = True
+                    else:
+                        updated_rows.append(row)
+                else:
+                    updated_rows.append(row)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading attendance file: {e}")
+        
+    if not found:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+        
+    try:
+        with open(file_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerows(updated_rows)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error writing to attendance file: {e}")
+        
+    return {"message": f"Attendance record for student ID {student_id} removed successfully."}
+
+# ----------------------------------------------------
+# WEBSOCKET STREAMING HANDLERS
+# ----------------------------------------------------
+
+# WebSocket: Capture images & Register student
+@app.websocket("/ws/register")
+async def websocket_register(websocket: WebSocket, id: str = Query(...), name: str = Query(...), password: str = Query(...)):
+    await websocket.accept()
+    
+    # Check admin password
+    psd_file = get_data_path("TrainingImageLabel", "psd.txt")
+    if os.path.isfile(psd_file):
+        with open(psd_file, "r") as f:
+            key = f.read().strip()
+    else:
+        key = ""
+        
+    if key and password != key:
+        await websocket.send_json({"status": "error", "message": "Incorrect admin password!"})
+        await websocket.close()
+        return
+        
+    if not check_haarcascadefile():
+        await websocket.send_json({"status": "error", "message": "Haar cascade file missing on server."})
+        await websocket.close()
+        return
+        
+    os.makedirs(get_data_path("StudentDetails"), exist_ok=True)
+    os.makedirs(get_data_path("TrainingImage"), exist_ok=True)
+    
+    detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+    serial = get_next_serial()
+    sampleNum = 0
+    
+    # Set columns for csv if it doesn't exist
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if not os.path.isfile(csv_path):
+        with open(csv_path, 'a+') as csvFile:
+            writer = csv.writer(csvFile)
+            writer.writerow(['SERIAL NO.', '', 'ID', '', 'NAME'])
+            serial = 1
+            
+    try:
+        while sampleNum < 100:
+            data = await websocket.receive_text()
+            
+            # Decode frame image
+            image_data = base64.b64decode(data)
+            nparr = np.frombuffer(image_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if img is None:
+                continue
+                
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = detector.detectMultiScale(gray, 1.3, 5)
+            
+            for (x, y, w, h) in faces:
+                sampleNum += 1
+                face_crop = gray[y:y + h, x:x + w]
+                # Save crop exactly in the same naming scheme as the original script
+                cv2.imwrite(get_data_path("TrainingImage", f" {name}.{serial}.{id}.{sampleNum}.jpg"), face_crop)
+                
+                # Send progress update
+                await websocket.send_json({"status": "capturing", "count": sampleNum})
+                
+                if sampleNum >= 100:
+                    break
+                    
+        # Write registration row to StudentDetails.csv
+        # Mimic the double-comma blank field layout of the original app
+        row = [serial, '', id, '', name]
+        with open(csv_path, 'a+') as csvFile:
+            writer = csv.writer(csvFile)
+            writer.writerow(row)
+            
+        await websocket.send_json({"status": "completed"})
+        
+    except WebSocketDisconnect:
+        print("Registration WebSocket disconnected.")
+    except Exception as e:
+        print(f"Error in registration loop: {e}")
+        try:
+            await websocket.send_json({"status": "error", "message": str(e)})
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass
+
+# Helper function to process frame in thread pool
+def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, student_map):
+    # Detect faces in original resolution grayscale frame with optimized parameters
+    faces_detected = detector.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
+    
+    results = []
+    for (x, y, w, h) in faces_detected:
+        student_name = "Unknown"
+        student_id = ""
+        serial_val = None
+        
+        if recognizer_loaded:
+            try:
+                # Crop face region
+                crop_face = gray[y:y + h, x:x + w]
+                if crop_face.shape[0] > 0 and crop_face.shape[1] > 0:
+                    serial, confidence = recognizer.predict(crop_face)
+                    if confidence < 50:
+                        if serial in student_map:
+                            student_id = student_map[serial]["id"]
+                            student_name = student_map[serial]["name"]
+                            serial_val = serial
+            except Exception as e:
+                print(f"Error predicting face: {e}")
+                
+        results.append({
+            "x": int(x),
+            "y": int(y),
+            "w": int(w),
+            "h": int(h),
+            "name": student_name,
+            "id": student_id,
+            "serial": serial_val
+        })
+    return results
+
+# WebSocket: Mark attendance in real time
+@app.websocket("/ws/attendance")
+async def websocket_attendance(websocket: WebSocket):
+    await websocket.accept()
+    
+    if not check_haarcascadefile():
+        await websocket.send_json({"status": "error", "message": "Haar cascade file missing."})
+        await websocket.close()
+        return
+        
+    detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+    
+    # Fetch student mappings from details CSV for fast lookup
+    student_map = {}
+    csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
+    if os.path.isfile(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            # Remove any empty spaces or blank columns from CSV headers
+            df.columns = df.columns.str.strip()
+            df = df.dropna(subset=['SERIAL NO.'])
+            for _, row in df.iterrows():
+                try:
+                    s_no = int(row['SERIAL NO.'])
+                    student_map[s_no] = {
+                        "id": str(row['ID']),
+                        "name": str(row['NAME'])
+                    }
+                except:
+                    continue
+        except Exception as e:
+            print(f"Error parsing StudentDetails.csv: {e}")
+            
+    # Keep track of marked IDs in this active websocket session
+    marked_in_session = set()
+    
+    # Load today's list of marked IDs from CSV to avoid duplicate triggers
+    ts = time.time()
+    date_str = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+    attendance_file = get_data_path("Attendance", f"Attendance_{date_str}.csv")
+    assure_path_exists(attendance_file)
+    
+    col_names = ['Id', '', 'Name', '', 'Date', '', 'Time']
+    if not os.path.isfile(attendance_file):
+        with open(attendance_file, 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(col_names)
+            
+    marked_today = set()
+    if os.path.isfile(attendance_file):
+        with open(attendance_file, 'r') as f:
+            reader = csv.reader(f)
+            for line in reader:
+                if len(line) > 0 and line[0] != 'Id':
+                    marked_today.add(line[0])
+                    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            # Decode frame
+            image_data = base64.b64decode(data)
+            nparr = np.frombuffer(image_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if img is None:
+                continue
+                
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+            # Offload computer vision processing to thread pool
+            detected_results = await asyncio.to_thread(
+                process_attendance_frame,
+                gray,
+                detector,
+                recognizer_loaded,
+                recognizer,
+                student_map
+            )
+            
+            faces_payload = []
+            attendance_marked = False
+            already_marked_alert = False
+            marked_student = None
+            
+            for face in detected_results:
+                face_status = "unknown"
+                student_name = face["name"]
+                student_id = face["id"]
+                
+                if student_id:
+                    # Attendance logic
+                    if student_id not in marked_today and student_id not in marked_in_session:
+                        # Log Attendance
+                        ts_now = time.time()
+                        time_str = datetime.datetime.fromtimestamp(ts_now).strftime('%H:%M:%S')
+                        date_str = datetime.datetime.fromtimestamp(ts_now).strftime('%d-%m-%Y')
+                        
+                        # Write row matching Tkinter template
+                        row = [student_id, '', student_name, '', date_str, '', time_str]
+                        with open(attendance_file, 'a') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(row)
+                            
+                        marked_today.add(student_id)
+                        marked_in_session.add(student_id)
+                        
+                        face_status = "marked"
+                        attendance_marked = True
+                        marked_student = {"id": student_id, "name": student_name, "time": time_str}
+                        
+                    elif student_id in marked_today:
+                        face_status = "already_marked"
+                        # Only alert the client if we haven't already marked/alerted in this socket session
+                        if student_id not in marked_in_session:
+                            marked_in_session.add(student_id)
+                            already_marked_alert = True
+                            marked_student = {"id": student_id, "name": student_name}
+                else:
+                    face_status = "unknown"
+                    student_name = "Unknown"
+                    
+                # Convert coords to JSON list
+                faces_payload.append({
+                    "x": face["x"],
+                    "y": face["y"],
+                    "w": face["w"],
+                    "h": face["h"],
+                    "name": student_name,
+                    "id": student_id,
+                    "status": face_status
+                })
+                
+            # Send results back
+            response_data = {
+                "faces": faces_payload,
+                "attendance_marked": attendance_marked,
+                "already_marked_alert": already_marked_alert,
+                "marked_student": marked_student
+            }
+            await websocket.send_json(response_data)
+            
+    except WebSocketDisconnect:
+        print("Attendance WebSocket disconnected.")
+    except Exception as e:
+        print(f"Error in attendance loop: {e}")
+    finally:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass
+
+if __name__ == "__main__":
+    import socket
+    def find_available_port(start_port=8000, host="0.0.0.0"):
+        port = start_port
+        ports_to_try = [8000, 8080, 8081, 5000, 8001] + list(range(start_port, start_port + 100))
+        for p in ports_to_try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind((host, p))
+                    return p
+                except OSError:
+                    continue
+        return start_port
+
+    port = find_available_port()
+    print(f"Starting server directly. Navigate to: http://localhost:{port}")
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)

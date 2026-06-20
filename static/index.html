@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendease - Face Recognition Attendance System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Style Sheets -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+                <h2>Attendease</h2>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" data-target="screen-dashboard">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#mark-attendance" class="nav-item" data-target="screen-mark-attendance">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                    <span>Mark Attendance</span>
+                </a>
+                <a href="#register" class="nav-item" data-target="screen-register">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                    <span>Register Student</span>
+                </a>
+                <a href="#students" class="nav-item" data-target="screen-students">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span>Registered Students</span>
+                </a>
+                <a href="#history" class="nav-item" data-target="screen-history">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>Attendance Logs</span>
+                </a>
+                <a href="#admin" class="nav-item" data-target="screen-admin">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>Admin Controls</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <p>v2.0 Premium Web</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Top Bar -->
+            <header class="topbar">
+                <div class="welcome-text">
+                    <h1 id="screen-title">Dashboard</h1>
+                    <p id="screen-subtitle">Overview of current registrations and today's attendance logs.</p>
+                </div>
+                
+                <div class="header-widgets">
+                    <!-- Date Widget -->
+                    <div class="header-widget">
+                        <span id="txt-date" class="widget-value">20 Jun 2026</span>
+                    </div>
+                    <!-- Clock Widget -->
+                    <div class="header-widget clock-widget">
+                        <span id="txt-clock" class="widget-value highlight">00:00:00</span>
+                    </div>
+                    <!-- Server Status Widget -->
+                    <div class="status-indicator">
+                        <span class="pulse-dot green"></span>
+                        <span class="status-text">Server Active</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Screens Container -->
+            <div class="screens-container">
+                
+                <!-- 1. DASHBOARD SCREEN -->
+                <div id="screen-dashboard" class="screen-view active">
+                    <!-- Stats Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon purple">
+                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Total Registered</span>
+                                <h3 id="stat-registered-count" class="stat-value">0</h3>
+                                <span class="stat-trend">Students enrolled</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon emerald">
+                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Present Today</span>
+                                <h3 id="stat-attendance-count" class="stat-value">0</h3>
+                                <span class="stat-trend trend-up">Marked present</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon coral">
+                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Absent Today</span>
+                                <h3 id="stat-absent-count" class="stat-value">0</h3>
+                                <span id="stat-absent-trend" class="stat-trend">0 students missing</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon orange">
+                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Model State</span>
+                                <h3 id="stat-model-status" class="stat-value">Checking...</h3>
+                                <span id="stat-model-date" class="stat-trend">LBPH Recognizer</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Section: Live Feed / Quick Actions -->
+                    <div class="dashboard-row">
+                        <!-- Left: Live Log Feed -->
+                        <div class="dashboard-panel flex-2">
+                            <div class="panel-header">
+                                <h3>Today's Attendance Logs</h3>
+                                <button id="btn-export-today" class="btn-secondary btn-sm">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Export CSV
+                                </button>
+                            </div>
+                            <div class="table-container">
+                                <table id="table-today">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Name</th>
+                                            <th>Date</th>
+                                            <th>Time</th>
+                                            <th style="text-align: right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-today">
+                                        <tr>
+                                            <td colspan="5" class="empty-state">No attendance recorded today.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Actions/Quick Links -->
+                        <div class="dashboard-panel flex-1">
+                            <div class="panel-header">
+                                <h3>Quick Actions</h3>
+                            </div>
+                            <div class="quick-actions-list">
+                                <a href="#mark-attendance" class="action-card mark-att-card" onclick="document.querySelector('[data-target=screen-mark-attendance]').click();">
+                                    <div class="action-icon">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    </div>
+                                    <div class="action-info">
+                                        <h4>Start Attendance Scanner</h4>
+                                        <p>Open live feed to mark present</p>
+                                    </div>
+                                </a>
+
+                                <a href="#register" class="action-card register-card" onclick="document.querySelector('[data-target=screen-register]').click();">
+                                    <div class="action-icon">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle></svg>
+                                    </div>
+                                    <div class="action-info">
+                                        <h4>Register New Student</h4>
+                                        <p>Capture face and add to database</p>
+                                    </div>
+                                </a>
+
+                                <div class="action-card train-card" id="quick-train-btn">
+                                    <div class="action-icon">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                    </div>
+                                    <div class="action-info">
+                                        <h4>Train Recognizer Model</h4>
+                                        <p>Train neural weights with raw face data</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. MARK ATTENDANCE SCREEN -->
+                <div id="screen-mark-attendance" class="screen-view">
+                    <div class="cam-layout">
+                        <!-- Camera Screen Column -->
+                        <div class="cam-container-panel">
+                            <div class="webcam-wrapper">
+                                <video id="cam-video" autoplay playsinline></video>
+                                <canvas id="cam-overlay"></canvas>
+                                
+                                <div id="cam-loading" class="cam-overlay-message active">
+                                    <div class="spinner"></div>
+                                    <p>Starting Camera...</p>
+                                </div>
+                                <div id="cam-error" class="cam-overlay-message text-danger">
+                                    <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"></path></svg>
+                                    <p id="cam-error-msg">Camera not accessible.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="cam-controls">
+                                <button id="btn-start-scanner" class="btn-primary">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    Activate Camera
+                                </button>
+                                <button id="btn-stop-scanner" class="btn-danger" disabled>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                                    Deactivate Camera
+                                </button>
+                                
+                                <div class="audio-toggle-container">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chk-audio" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Voice Notifications</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel Side Info -->
+                        <div class="cam-info-panel">
+                            <div class="dashboard-panel height-full">
+                                <div class="panel-header">
+                                    <h3>Scanned Attendance today</h3>
+                                </div>
+                                <p class="muted-text">Live updates of students scanned in this session.</p>
+                                
+                                <div class="session-log-list" id="session-scanned-list">
+                                    <div class="empty-session-log">
+                                        <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                        <p>No faces scanned yet. Activate the scanner and position your face in the box.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. REGISTER STUDENT SCREEN -->
+                <div id="screen-register" class="screen-view">
+                    <div class="register-layout">
+                        <!-- Left: Form inputs -->
+                        <div class="register-form-panel">
+                            <div class="dashboard-panel">
+                                <div class="panel-header">
+                                    <h3>Student Registration</h3>
+                                </div>
+                                
+                                <form id="form-registration" onsubmit="return false;">
+                                    <div class="form-group">
+                                        <label for="reg-student-id">Student ID (Numbers Only)</label>
+                                        <input type="text" id="reg-student-id" placeholder="e.g. 101" required autocomplete="off">
+                                        <small class="form-hint">Unique numeric identifier for the student.</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="reg-student-name">Student Name</label>
+                                        <input type="text" id="reg-student-name" placeholder="e.g. John Doe" required autocomplete="off">
+                                        <small class="form-hint">Alphabets and spaces only.</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="reg-admin-password">Admin Password</label>
+                                        <input type="password" id="reg-admin-password" placeholder="••••••••" required autocomplete="off">
+                                        <small class="form-hint">Verify admin authorization to capture face.</small>
+                                    </div>
+
+                                    <div id="reg-status-alert" class="alert-box hide">
+                                        <p id="reg-status-alert-text">Ready</p>
+                                    </div>
+
+                                    <div class="form-actions">
+                                        <button type="submit" id="btn-start-register" class="btn-primary btn-full">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                            Capture Face & Register
+                                        </button>
+                                        <button type="button" id="btn-cancel-register" class="btn-secondary btn-full hide">
+                                            Cancel Capture
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Right: Camera Registration Preview -->
+                        <div class="register-cam-panel">
+                            <div class="webcam-wrapper reg-cam-wrapper">
+                                <video id="reg-video" autoplay playsinline></video>
+                                <canvas id="reg-overlay"></canvas>
+                                
+                                <div id="reg-cam-loading" class="cam-overlay-message">
+                                    <div class="spinner"></div>
+                                    <p>Starting Camera...</p>
+                                </div>
+                                <div id="reg-cam-instructions" class="cam-overlay-message active bg-blur-dark">
+                                    <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                    <p>Enter Student ID and Name, then click "Capture Face & Register". Look directly at the camera, move your head slightly to capture different angles.</p>
+                                </div>
+                                
+                                <!-- Progress Indicator -->
+                                <div id="reg-progress-overlay" class="reg-progress-overlay hide">
+                                    <div class="progress-radial-container">
+                                        <div class="progress-radial">
+                                            <svg viewBox="0 0 100 100" class="radial-svg">
+                                                <circle cx="50" cy="50" r="40" class="bg-circle"></circle>
+                                                <circle cx="50" cy="50" r="40" class="fg-circle" id="reg-progress-circle" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                            </svg>
+                                            <div class="progress-text">
+                                                <span id="reg-progress-percent" class="percent-val">0%</span>
+                                                <span id="reg-progress-counter" class="count-val">0/100</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="progress-label">Capturing face samples. Keep looking at the webcam...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REGISTERED STUDENTS SCREEN -->
+                <div id="screen-students" class="screen-view">
+                    <div class="dashboard-panel">
+                        <div class="panel-header search-header">
+                            <div class="history-controls">
+                                <button id="btn-refresh-students" class="btn-primary">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                    Refresh List
+                                </button>
+                            </div>
+                            
+                            <div class="search-box">
+                                <input type="text" id="search-students" placeholder="Search students by name or ID...">
+                            </div>
+                        </div>
+
+                        <div class="alert-box warning-box" style="margin-bottom: 20px; background-color: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); padding: 12px; border-radius: var(--border-radius-md); display: flex; align-items: center; gap: 10px;">
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="#f59e0b" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                            <span style="color: #fbbf24; font-size: 13px; font-weight: 500;">IMPORTANT: After removing a student, you must go to <strong>Admin Controls</strong> and click <strong>Compile & Retrain Model</strong> to apply changes.</span>
+                        </div>
+                        
+                        <div class="table-container large-table-container">
+                            <table id="table-students">
+                                <thead>
+                                    <tr>
+                                        <th>Serial No.</th>
+                                        <th>Student ID</th>
+                                        <th>Student Name</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-students">
+                                    <tr>
+                                        <td colspan="4" class="empty-state">Loading registered students...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. ATTENDANCE HISTORY SCREEN -->
+                <div id="screen-history" class="screen-view">
+                    <div class="dashboard-panel">
+                        <div class="panel-header search-header">
+                            <div class="history-controls">
+                                <div class="form-group inline-group">
+                                    <label for="history-file-select">Select Date Logs</label>
+                                    <select id="history-file-select" class="form-select">
+                                        <option value="">-- Select Date --</option>
+                                    </select>
+                                </div>
+                                <button id="btn-refresh-history" class="btn-icon">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                </button>
+                            </div>
+                            
+                            <div class="search-box">
+                                <input type="text" id="search-history" placeholder="Search by name or ID...">
+                            </div>
+
+                            <button id="btn-export-history" class="btn-secondary" disabled>
+                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download Excel/CSV
+                            </button>
+                        </div>
+                        
+                        <div class="table-container large-table-container">
+                            <table id="table-history">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Student Name</th>
+                                        <th>Date Logged</th>
+                                        <th>Time Logged</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-history">
+                                    <tr>
+                                        <td colspan="5" class="empty-state">Select a date from the dropdown to load history logs.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. ADMIN CONTROLS SCREEN -->
+                <div id="screen-admin" class="screen-view">
+                    <div class="admin-grid">
+                        <!-- Model Training Panel -->
+                        <div class="dashboard-panel">
+                            <div class="panel-header">
+                                <h3>Training Dashboard</h3>
+                            </div>
+                            <p class="panel-desc">Before recognizing newly registered students, you must compile and retrain the face recognition weights database.</p>
+                            
+                            <div class="training-state-widget">
+                                <div class="brain-icon-wrapper" id="brain-wrapper">
+                                    <svg viewBox="0 0 24 24" width="64" height="64" class="brain-svg" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2zM14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2z"></path></svg>
+                                </div>
+                                <div class="training-details">
+                                    <span class="muted-text">Classifier Engine</span>
+                                    <h4>LBPH Face Recognizer</h4>
+                                    <p id="txt-training-status">Classifier model trained. Ready for scanning.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="panel-actions">
+                                <button id="btn-train-model" class="btn-primary btn-full">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                    Compile & Retrain Model
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Change Password Card -->
+                        <div class="dashboard-panel">
+                            <div class="panel-header">
+                                <h3>Admin Settings</h3>
+                            </div>
+                            <p class="panel-desc">Modify the security lock credentials required to compile training images.</p>
+                            
+                            <form id="form-change-password" onsubmit="return false;">
+                                <div class="form-group">
+                                    <label for="admin-old-pass">Old Password</label>
+                                    <input type="password" id="admin-old-pass" placeholder="••••••••" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="admin-new-pass">New Password</label>
+                                    <input type="password" id="admin-new-pass" placeholder="••••••••" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="admin-confirm-pass">Confirm Password</label>
+                                    <input type="password" id="admin-confirm-pass" placeholder="••••••••" required>
+                                </div>
+
+                                <div id="admin-alert-box" class="alert-box hide">
+                                    <p id="admin-alert-text">Ready</p>
+                                </div>
+                                
+                                <div class="panel-actions">
+                                    <button type="submit" id="btn-change-password" class="btn-secondary btn-full">
+                                        Update Password
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Remote Server Settings Card -->
+                        <div class="dashboard-panel">
+                            <div class="panel-header">
+                                <h3>Remote Server Settings</h3>
+                            </div>
+                            <p class="panel-desc">Configure the local server API endpoint if running the frontend online separately.</p>
+                            
+                            <form id="form-backend-config" onsubmit="return false;">
+                                <div class="form-group">
+                                    <label for="backend-api-url">Backend Server URL</label>
+                                    <input type="url" id="backend-api-url" placeholder="e.g. https://xxxx.ngrok-free.app" autocomplete="off">
+                                    <small class="form-hint">Leave blank to use the same host the page is loaded from (default).</small>
+                                </div>
+                                
+                                <div class="panel-actions">
+                                    <button type="submit" id="btn-save-backend" class="btn-primary btn-full">
+                                        Save Configuration
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Support / Info Details -->
+                    <div class="dashboard-panel info-bottom-panel">
+                        <h3>System Configuration</h3>
+                        <div class="system-meta-grid">
+                            <div class="meta-item">
+                                <span class="meta-label">Application Core</span>
+                                <span class="meta-val">FastAPI (Python Backend) + Vanilla ES6 Javascript</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">CV Engine</span>
+                                <span class="meta-val">OpenCV LBPH Face Recognizer (haarcascade_frontalface_default)</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Developer Support</span>
+                                <span class="meta-val">Email: <a href="mailto:iit2024172@iiita.ac.in">iit2024172@iiita.ac.in</a></span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Storage Base</span>
+                                <span class="meta-val">CSV Text Database (Flat Files)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast-notification hide">
+        <div class="toast-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <div class="toast-content">
+            <h4 id="toast-title">Notification</h4>
+            <p id="toast-message">Success message goes here.</p>
+        </div>
+    </div>
+
+    <!-- Overlay training screen -->
+    <div id="training-overlay" class="overlay-lock hide">
+        <div class="overlay-content">
+            <div class="gear-spinner-wrapper">
+                <div class="gear-spinner"></div>
+            </div>
+            <h2>Compiling Face Encodings</h2>
+            <p>Please wait. The LBPH classifier is fitting the captured face profiles...</p>
+        </div>
+    </div>
+
+    <!-- Script imports -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

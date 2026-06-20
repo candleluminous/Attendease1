@@ -1,0 +1,8 @@
+opencv-contrib-python-headless
+numpy
+pandas
+Pillow
+fastapi
+uvicorn
+websockets
+python-multipart

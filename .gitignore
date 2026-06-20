@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Local database flat files, images, and model weights
+Attendance/
+StudentDetails/
+TrainingImage/
+TrainingImageLabel/
