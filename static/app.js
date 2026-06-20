@@ -840,12 +840,6 @@ function filterHistoryTable() {
 // Delete an attendance entry
 async function deleteAttendanceEntry(filename, studentId, timeLogged, studentName) {
     console.log("[DELETE ATTENDANCE] Initiated for student:", studentName, "ID:", studentId, "time:", timeLogged);
-    if (!confirm(`Are you sure you want to remove the attendance log for "${studentName}" (ID: ${studentId}) at ${timeLogged}?`)) {
-        console.log("[DELETE ATTENDANCE] Cancelled by user.");
-        return;
-    }
-    
-    console.log("[DELETE ATTENDANCE] Confirmed. Sending fetch request...");
     try {
         const url = getBackendUrl() + `/api/attendance?filename=${encodeURIComponent(filename)}&student_id=${encodeURIComponent(studentId)}&time_logged=${encodeURIComponent(timeLogged)}`;
         console.log("[DELETE ATTENDANCE] Request URL:", url);
@@ -1035,12 +1029,7 @@ async function loadRegisteredStudents() {
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name');
                 console.log("[STUDENT DELETE] Clicked Remove for name:", name, "ID:", id);
-                if (confirm(`Are you sure you want to remove student "${name}" (ID: ${id}) and delete all their training face images?`)) {
-                    console.log("[STUDENT DELETE] Confirmed. Calling deleteStudent API...");
-                    await deleteStudent(id);
-                } else {
-                    console.log("[STUDENT DELETE] Cancelled by user.");
-                }
+                await deleteStudent(id);
             });
         });
     } catch (err) {
