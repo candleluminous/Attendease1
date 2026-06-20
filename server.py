@@ -119,12 +119,12 @@ class PasswordVerifyRequest(BaseModel):
 # Root: Serves index.html SPA dashboard
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
-    index_path = "static/index.html"
+    index_path = "index.html"
     if os.path.isfile(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
     else:
-        raise HTTPException(status_code=404, detail="index.html not found under static/")
+        raise HTTPException(status_code=404, detail="index.html not found in root directory")
 
 # API Stats
 @app.get("/api/stats")
