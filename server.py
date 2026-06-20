@@ -515,7 +515,7 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
     # Set columns for csv if it doesn't exist
     csv_path = get_data_path("StudentDetails", "StudentDetails.csv")
     if not os.path.isfile(csv_path):
-        with open(csv_path, 'a+') as csvFile:
+        with open(csv_path, 'a+', newline='', encoding='utf-8') as csvFile:
             writer = csv.writer(csvFile)
             writer.writerow(['SERIAL NO.', '', 'ID', '', 'NAME'])
             serial = 1
@@ -550,7 +550,7 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
         # Write registration row to StudentDetails.csv
         # Mimic the double-comma blank field layout of the original app
         row = [serial, '', id, '', name]
-        with open(csv_path, 'a+') as csvFile:
+        with open(csv_path, 'a+', newline='', encoding='utf-8') as csvFile:
             writer = csv.writer(csvFile)
             writer.writerow(row)
             
@@ -650,7 +650,7 @@ async def websocket_attendance(websocket: WebSocket):
     
     col_names = ['Id', '', 'Name', '', 'Date', '', 'Time']
     if not os.path.isfile(attendance_file):
-        with open(attendance_file, 'w') as f:
+        with open(attendance_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(col_names)
             
@@ -706,7 +706,7 @@ async def websocket_attendance(websocket: WebSocket):
                         
                         # Write row matching Tkinter template
                         row = [student_id, '', student_name, '', date_str, '', time_str]
-                        with open(attendance_file, 'a') as f:
+                        with open(attendance_file, 'a', newline='', encoding='utf-8') as f:
                             writer = csv.writer(f)
                             writer.writerow(row)
                             
