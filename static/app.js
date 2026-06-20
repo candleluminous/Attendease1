@@ -226,6 +226,8 @@ async function loadTodayAttendance() {
         const deleteButtons = tbody.querySelectorAll('.btn-delete-attendance');
         deleteButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const filename = btn.getAttribute('data-filename');
                 const id = btn.getAttribute('data-id');
                 const time = btn.getAttribute('data-time');
@@ -788,6 +790,8 @@ async function loadHistoryRecords() {
         const deleteButtons = tbody.querySelectorAll('.btn-delete-attendance');
         deleteButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const filename = btn.getAttribute('data-filename');
                 const id = btn.getAttribute('data-id');
                 const time = btn.getAttribute('data-time');
@@ -1019,6 +1023,8 @@ async function loadRegisteredStudents() {
         const deleteButtons = tbody.querySelectorAll('.btn-delete-student');
         deleteButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name');
                 if (confirm(`Are you sure you want to remove student "${name}" (ID: ${id}) and delete all their training face images?`)) {
