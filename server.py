@@ -341,16 +341,14 @@ async def get_attendance_history(filename: str = Query(None), download: bool = Q
     files_list.sort(key=parse_file_date, reverse=True)
     return {"files": files_list}
 
-# Model Trainer Endpoint
-@app.post("/api/train")
-async def api_train_model():
+# Helper to run model training asynchronously
+async def run_training_pipeline():
     if not check_haarcascadefile():
-        raise HTTPException(status_code=500, detail="Haar cascade file not found on server!")
+        return False, "Haar cascade file not found on server!"
         
     image_dir = get_data_path("TrainingImage")
     os.makedirs(image_dir, exist_ok=True)
     
-    # Run CPU intensive trainer in a thread pool to avoid blocking Event Loop
     def train_task():
         image_paths = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith(".jpg")]
         print(f"[TRAIN] Found {len(image_paths)} image files in {image_dir}")
@@ -400,7 +398,14 @@ async def api_train_model():
                 print(f"[TRAIN] Skipping bad image {image_path}: {ex}")
                 
         if len(faces) == 0:
-            return False, f"No student face data found. {len(image_paths)} files scanned, {skipped} skipped. Register someone first!"
+            # If no faces remain, remove Trainer file to keep state consistent
+            trainer_path = get_data_path("TrainingImageLabel", "Trainner.yml")
+            if os.path.isfile(trainer_path):
+                try:
+                    os.remove(trainer_path)
+                except Exception as e:
+                    print(f"[TRAIN] Error removing empty model: {e}")
+            return False, "No student face data found. Register someone first!"
             
         print(f"[TRAIN] Training LBPH with {len(faces)} face samples from {len(set(ids))} unique IDs")
         
@@ -424,16 +429,19 @@ async def api_train_model():
     
     try:
         success, msg = await asyncio.to_thread(train_task)
-        if not success:
-            raise HTTPException(status_code=400, detail=msg)
-    except HTTPException:
-        raise
+        if success:
+            reload_recognizer()
+        return success, msg
     except Exception as ex:
-        print(f"[TRAIN] Unexpected error: {ex}")
-        raise HTTPException(status_code=500, detail=f"Training crashed: {str(ex)}")
-        
-    # Reload model in server memory
-    reload_recognizer()
+        print(f"[TRAIN] Unexpected training error: {ex}")
+        return False, f"Training crashed: {str(ex)}"
+
+# Model Trainer Endpoint
+@app.post("/api/train")
+async def api_train_model():
+    success, msg = await run_training_pipeline()
+    if not success:
+        raise HTTPException(status_code=500, detail=msg)
     return {"message": msg}
 
 # Change Admin Password
@@ -623,6 +631,10 @@ async def api_delete_student(student_id: str):
         except Exception as e:
             print(f"Error scanning TrainingImage directory: {e}")
             
+    # Automatically retrain the model to remove this student's face profiles
+    print(f"[DELETION] Auto-training model after deleting student {student_id}...")
+    await run_training_pipeline()
+    
     return {
         "message": f"Student {student_name} (ID: {student_id}) removed successfully.",
         "deleted_images": deleted_images_count
@@ -768,6 +780,10 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
         with open(csv_path, 'a+', newline='', encoding='utf-8') as csvFile:
             writer = csv.writer(csvFile)
             writer.writerow(row)
+            
+        # Automatically retrain the model with the new student's faces
+        print("[REGISTRATION] Auto-training model for new student...")
+        await run_training_pipeline()
             
         await websocket.send_json({"status": "completed"})
         
