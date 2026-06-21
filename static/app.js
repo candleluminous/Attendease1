@@ -726,7 +726,7 @@ async function loadHistoryFileList() {
         const data = await response.json();
         
         const select = document.getElementById('history-file-select');
-        select.innerHTML = '<option value="">-- Select Date --</option>';
+        select.innerHTML = '<option value=""> Select Date </option>';
         
         if (data.files.length === 0) {
             return;
