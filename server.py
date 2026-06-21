@@ -896,6 +896,9 @@ async def websocket_attendance(websocket: WebSocket):
     # Keep track of marked IDs in this active websocket session
     marked_in_session = set()
     
+    # Consecutive recognition counts to stabilize predictions and prevent spurious false markings
+    recognition_counts = defaultdict(int)
+    
     # Multi-frame confidence history: tracks rolling predictions per face region
     confidence_history = defaultdict(deque)
     
@@ -949,39 +952,54 @@ async def websocket_attendance(websocket: WebSocket):
             already_marked_alert = False
             marked_student = None
             
+            # Track which student IDs are detected in this frame
+            detected_ids = {face["id"] for face in detected_results if face["id"]}
+            
+            # Decay counts for student IDs not detected in this frame
+            for sid in list(recognition_counts.keys()):
+                if sid not in detected_ids:
+                    recognition_counts[sid] = max(0, recognition_counts[sid] - 1)
+            
             for face in detected_results:
                 face_status = "unknown"
                 student_name = face["name"]
                 student_id = face["id"]
                 
                 if student_id:
-                    # Attendance logic
-                    if student_id not in marked_today and student_id not in marked_in_session:
-                        # Log Attendance
-                        ts_now = time.time()
-                        time_str = datetime.datetime.fromtimestamp(ts_now).strftime('%H:%M:%S')
-                        date_str = datetime.datetime.fromtimestamp(ts_now).strftime('%d-%m-%Y')
-                        
-                        # Write row matching Tkinter template
-                        row = [student_id, '', student_name, '', date_str, '', time_str]
-                        with open(attendance_file, 'a', newline='', encoding='utf-8') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(row)
+                    # Increment consecutive detection count
+                    recognition_counts[student_id] += 1
+                    
+                    # Require at least 5 frames of stable recognition to mark or alert
+                    if recognition_counts[student_id] >= 5:
+                        if student_id not in marked_today and student_id not in marked_in_session:
+                            # Log Attendance
+                            ts_now = time.time()
+                            time_str = datetime.datetime.fromtimestamp(ts_now).strftime('%H:%M:%S')
+                            date_str = datetime.datetime.fromtimestamp(ts_now).strftime('%d-%m-%Y')
                             
-                        marked_today.add(student_id)
-                        marked_in_session.add(student_id)
-                        
-                        face_status = "marked"
-                        attendance_marked = True
-                        marked_student = {"id": student_id, "name": student_name, "time": time_str}
-                        
-                    elif student_id in marked_today:
-                        face_status = "already_marked"
-                        # Only alert the client if we haven't already marked/alerted in this socket session
-                        if student_id not in marked_in_session:
+                            # Write row matching Tkinter template
+                            row = [student_id, '', student_name, '', date_str, '', time_str]
+                            with open(attendance_file, 'a', newline='', encoding='utf-8') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(row)
+                                
+                            marked_today.add(student_id)
                             marked_in_session.add(student_id)
-                            already_marked_alert = True
-                            marked_student = {"id": student_id, "name": student_name}
+                            
+                            face_status = "marked"
+                            attendance_marked = True
+                            marked_student = {"id": student_id, "name": student_name, "time": time_str}
+                            
+                        elif student_id in marked_today:
+                            face_status = "already_marked"
+                            # Only alert the client if we haven't already marked/alerted in this socket session
+                            if student_id not in marked_in_session:
+                                marked_in_session.add(student_id)
+                                already_marked_alert = True
+                                marked_student = {"id": student_id, "name": student_name}
+                    else:
+                        face_status = "verifying"
+                        student_name = f"Verifying {student_name}..."
                 else:
                     face_status = "unknown"
                     student_name = "Unknown"
