@@ -93,7 +93,15 @@ def reload_recognizer():
     trainer_path = get_data_path("TrainingImageLabel", "Trainner.yml")
     if os.path.isfile(trainer_path):
         try:
-            recognizer.read(trainer_path)
+            # Re-create recognizer to avoid wrapper pointer corruption in Python bindings on reload
+            new_recognizer = cv2.face.LBPHFaceRecognizer_create(
+                radius=LBPH_RADIUS, 
+                neighbors=LBPH_NEIGHBORS, 
+                grid_x=LBPH_GRID_X, 
+                grid_y=LBPH_GRID_Y
+            )
+            new_recognizer.read(trainer_path)
+            recognizer = new_recognizer
             recognizer_loaded = True
             print("LBPH Recognizer model loaded successfully.")
         except Exception as e:
