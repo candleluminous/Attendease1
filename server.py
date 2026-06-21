@@ -15,16 +15,29 @@ from pydantic import BaseModel
 import asyncio
 import uvicorn
 
-# ---- Face Preprocessing Pipeline ----
-FACE_SIZE = 200  # Uniform face crop dimension
+# ---- Face Recognition & Detection Configuration Constants ----
+FACE_SIZE = 200          # Uniform face crop dimension
+CONFIDENCE_THRESHOLD = 80 # LBPH distance threshold (lower = stricter/better match, rejecting > 80)
+
+# Haar Cascade Parameters
+HAAR_SCALE_FACTOR = 1.2
+HAAR_MIN_NEIGHBORS = 5
+HAAR_MIN_SIZE_REG = (80, 80)
+HAAR_MIN_SIZE_ATT = (60, 60)
+
+# LBPH Face Recognizer Parameters
+LBPH_RADIUS = 1
+LBPH_NEIGHBORS = 8
+LBPH_GRID_X = 8
+LBPH_GRID_Y = 8
 
 def preprocess_face(face_img):
-    """Apply CLAHE + bilateral filter + resize to a grayscale face crop.
-    This must be used identically during training, registration, AND recognition."""
+    """Apply CLAHE + mild Gaussian Blur + resize to a grayscale face crop.
+    This must be used identically during training and recognition."""
     # Resize to uniform dimensions
     face_resized = cv2.resize(face_img, (FACE_SIZE, FACE_SIZE))
-    # Bilateral filter: reduce noise while preserving edges
-    face_filtered = cv2.bilateralFilter(face_resized, d=9, sigmaColor=75, sigmaSpace=75)
+    # Mild Gaussian blur: reduce high frequency noise while preserving LBP spatial patterns
+    face_filtered = cv2.GaussianBlur(face_resized, (3, 3), 0)
     # CLAHE: adaptive histogram equalization for lighting robustness
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     face_clahe = clahe.apply(face_filtered)
@@ -66,8 +79,13 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(NoCacheStaticMiddleware)
 
-# Shared Recognizer instance — tuned LBPH parameters for better discrimination
-recognizer = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=8, grid_x=8, grid_y=8)
+# Shared Recognizer instance
+recognizer = cv2.face.LBPHFaceRecognizer_create(
+    radius=LBPH_RADIUS, 
+    neighbors=LBPH_NEIGHBORS, 
+    grid_x=LBPH_GRID_X, 
+    grid_y=LBPH_GRID_Y
+)
 recognizer_loaded = False
 
 def reload_recognizer():
@@ -352,14 +370,18 @@ async def api_train_model():
                     faces.append(flipped)
                     ids.append(serial_no)
                     
-                    # Augmentation 2: slight brightness increase
-                    bright = cv2.convertScaleAbs(processed, alpha=1.15, beta=15)
-                    faces.append(bright)
+                    # Augmentation 2: rotate left by 5 degrees (handles slight head tilts)
+                    h_h, w_w = processed.shape[:2]
+                    center = (w_w // 2, h_h // 2)
+                    m_left = cv2.getRotationMatrix2D(center, 5, 1.0)
+                    rotated_left = cv2.warpAffine(processed, m_left, (w_w, h_h))
+                    faces.append(rotated_left)
                     ids.append(serial_no)
                     
-                    # Augmentation 3: slight brightness decrease
-                    dark = cv2.convertScaleAbs(processed, alpha=0.85, beta=-15)
-                    faces.append(dark)
+                    # Augmentation 3: rotate right by 5 degrees
+                    m_right = cv2.getRotationMatrix2D(center, -5, 1.0)
+                    rotated_right = cv2.warpAffine(processed, m_right, (w_w, h_h))
+                    faces.append(rotated_right)
                     ids.append(serial_no)
                 else:
                     skipped += 1
@@ -375,8 +397,13 @@ async def api_train_model():
         print(f"[TRAIN] Training LBPH with {len(faces)} face samples from {len(set(ids))} unique IDs")
         
         try:
-            # Tuned LBPH: radius=2 captures larger patterns, neighbors=8 for balanced RAM/details
-            rec = cv2.face.LBPHFaceRecognizer_create(radius=2, neighbors=8, grid_x=8, grid_y=8)
+            # Tuned LBPH: configured using global constants
+            rec = cv2.face.LBPHFaceRecognizer_create(
+                radius=LBPH_RADIUS, 
+                neighbors=LBPH_NEIGHBORS, 
+                grid_x=LBPH_GRID_X, 
+                grid_y=LBPH_GRID_Y
+            )
             rec.train(faces, np.array(ids, dtype=np.int32))
             os.makedirs(get_data_path("TrainingImageLabel"), exist_ok=True)
             rec.save(get_data_path("TrainingImageLabel", "Trainner.yml"))
@@ -707,20 +734,25 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
                 continue
                 
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            faces = detector.detectMultiScale(gray, 1.3, 5)
+            faces = detector.detectMultiScale(
+                gray, 
+                scaleFactor=HAAR_SCALE_FACTOR, 
+                minNeighbors=HAAR_MIN_NEIGHBORS, 
+                minSize=HAAR_MIN_SIZE_REG
+            )
             
-            for (x, y, w, h) in faces:
+            if len(faces) > 0:
+                # Select only the single largest face to avoid background clutter or secondary faces
+                faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+                (x, y, w, h) = faces[0]
+                
                 sampleNum += 1
                 face_crop = gray[y:y + h, x:x + w]
-                # Preprocess before saving for consistent high-quality training data
-                face_processed = preprocess_face(face_crop)
-                cv2.imwrite(get_data_path("TrainingImage", f"{name}.{serial}.{id}.{sampleNum}.jpg"), face_processed)
+                # Save the raw face crop directly to disk (mismatch corrected: preprocessing is applied exactly once during training)
+                cv2.imwrite(get_data_path("TrainingImage", f"{name}.{serial}.{id}.{sampleNum}.jpg"), face_crop)
                 
                 # Send progress update
                 await websocket.send_json({"status": "capturing", "count": sampleNum})
-                
-                if sampleNum >= 100:
-                    break
                     
         # Write registration row to StudentDetails.csv
         # Mimic the double-comma blank field layout of the original app
@@ -747,8 +779,13 @@ async def websocket_register(websocket: WebSocket, id: str = Query(...), name: s
 
 # Helper function to process frame in thread pool
 def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, student_map, confidence_history):
-    # Detect faces in original resolution grayscale frame with optimized parameters
-    faces_detected = detector.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
+    # Detect faces in original resolution grayscale frame with aligned parameters
+    faces_detected = detector.detectMultiScale(
+        gray, 
+        scaleFactor=HAAR_SCALE_FACTOR, 
+        minNeighbors=HAAR_MIN_NEIGHBORS, 
+        minSize=HAAR_MIN_SIZE_ATT
+    )
     
     results = []
     for (x, y, w, h) in faces_detected:
@@ -769,9 +806,8 @@ def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, stud
                     # Debug: log confidence values to diagnose recognition issues
                     print(f"[RECOGNITION] Serial={serial}, Confidence={confidence:.1f}, Student={'KNOWN' if serial in student_map else 'NOT_IN_MAP'}")
                     
-                    # Confidence < 110: LBPH distance metric, lower = better match
-                    # Railway logs show valid faces scoring 85-95, so threshold set to 110
-                    if confidence < 110:
+                    # LBPH distance metric: lower = better match. Reject if confidence >= CONFIDENCE_THRESHOLD
+                    if confidence < CONFIDENCE_THRESHOLD:
                         # Multi-frame averaging: track predictions by face region
                         cx = (x + w // 2) // 50
                         cy = (y + h // 2) // 50
@@ -801,7 +837,7 @@ def process_attendance_frame(gray, detector, recognizer_loaded, recognizer, stud
                                     student_id = student_map[best_serial]["id"]
                                     student_name = student_map[best_serial]["name"]
                     else:
-                        print(f"[RECOGNITION] REJECTED: confidence {confidence:.1f} >= 85 threshold")
+                        print(f"[RECOGNITION] REJECTED: confidence {confidence:.1f} >= {CONFIDENCE_THRESHOLD} threshold")
             except Exception as e:
                 print(f"Error predicting face: {e}")
                 
